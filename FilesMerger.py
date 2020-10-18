@@ -5,9 +5,9 @@ import re
 import qgrid as qd
 import numpy as np
 import difflib
-from FileValidation import FileValidation 
+from FileOperation import FileOperation 
 
-class BulkReader:
+class FilesMerger:
     def __init__(self,path):
         self.path = path
         self.all_files = self.readDirCsv()
@@ -18,7 +18,7 @@ class BulkReader:
         return all_files
     
     def bulk_operation(self):
-        results = [FileValidation(filename).getExtractedDataBase() for filename in self.all_files]
+        results = [FileOperation(filename).getExtractedDataBase() for filename in self.all_files]
         return results
     
     def concat(self):
@@ -32,8 +32,8 @@ class BulkReader:
         
 if __name__ == '__main__':
     path = r'raw'
-    br = BulkReader(path)
-    br.concat()
+    fm = FilesMerger(path)
+    fm.concat()
     
     
             
