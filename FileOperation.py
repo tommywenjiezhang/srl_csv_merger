@@ -5,6 +5,8 @@ import re
 import qgrid as qd
 import numpy as np
 import difflib
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
 
 ## Match Table Variable
 # ismatchedForeignColumns
@@ -107,23 +109,41 @@ class FileOperation:
         new_df['schemaColumnsName'] = pd.Series(self._schema_df['ColumnName'])
         new_df['foreignColumns'] =  foreignColumns
         
-        # Fuzzy Match Alorgthrim 
-        def is_in_matched(foreignColumsName,schemaColumns):
+        
+        
+        # diff match
+        def diff_matched(foreignColumsName,schemaColumns):
             w = str(foreignColumsName).lower()
             matchedArry = difflib.get_close_matches(w, schemaColumns.ColumnName.astype(str), n=50, cutoff=.6)
             if len(matchedArry) > 0:
                 return matchedArry[0]
             else:
                 return None
+        # Fuzzy Match Alorgthrim 
+        def is_in_matched(foreignColumsName,schemaColumns):
+            w = str(foreignColumsName).lower()
+            matchedArry = process.extractOne(w, schemaColumns.ColumnName.astype(str))
+            if len(matchedArry) > 0:
+                return matchedArry
+            else:
+                return None
         
         # creating fuzzyMatch column exact Match
-        new_df['fuzzyMatch'] = new_df['foreignColumns'].apply(lambda x: is_in_matched(x,self._schema_df))
-        new_df['fuzzyMatch'].drop_duplicates()
+        new_df['fuzzyMatch'] = new_df['foreignColumns'].apply(lambda x: is_in_matched(x,self._schema_df)[0])
+        new_df['fuzzyScore'] = new_df['foreignColumns'].apply(lambda x: is_in_matched(x,self._schema_df)[1])
+        new_df['diffmatch'] = new_df['foreignColumns'].apply(lambda x: diff_matched(x,self._schema_df))
+        
+        new_df['fuzzyMatch'] = pd.Series(new_df.loc[pd.notnull(new_df['fuzzyMatch']),'fuzzyMatch'].to_numpy())
+        new_df['diffmatch'] = pd.Series(new_df.loc[pd.notnull(new_df['diffmatch']),'diffmatch'].to_numpy())
         isfuzzyMatched = pd.notnull(new_df['fuzzyMatch'])
-        exactMatched = foreignColumns.isin(self._schema_df['ColumnName'])
+        isDiffMatched = pd.notnull(new_df['diffmatch'])
+        
+        combinedMatched = np.logical_and(isfuzzyMatched,isDiffMatched)
+        
+        
         
         # check if the foreign columns name 
-        new_df['ismatchedForeignColumns'] = np.logical_or(isfuzzyMatched, exactMatched)
+        new_df['ismatchedForeignColumns'] =  combinedMatched
         
 
         # filter out the not match columns later needs to drop
@@ -136,6 +156,7 @@ class FileOperation:
         new_df['MatchedForeignColumn'] = pd.Series(strOutPut)
         
         new_df['filename'] = self.filename
+        new_df.to_csv(r"debug/matchtable.csv")
         return new_df
 
 

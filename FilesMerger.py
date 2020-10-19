@@ -27,9 +27,25 @@ class FilesMerger:
         df = df.loc[:, (df.notnull().sum(axis=0) >= min_number_of_value)]
         moveItems = ["CompanyName" , "UserEmail" , "UserFirstName", "UserLastName" , "Website", "WorkNumber", "Address" ,  "City" , "State" ,  "Zip" , "filename"]
         df = df[[y for y in moveItems]+[x for x in df if x not in moveItems ]]
+        hasEmailorPhone = np.logical_or(pd.notnull(df["UserEmail"]),pd.notnull(df["WorkNumber"]))
+        df = df.loc[hasEmailorPhone]
         df.to_csv("out/finalMerge_ver4.csv")
-        return df
-        
+        df.drop_duplicates(inplace=True)
+        df = df.sort_values(by=["UserEmail", "CompanyName"], ascending=True, na_position="last")
+        return self.clean(df)
+    
+    def clean(self, final_merge):
+        final_merge = final_merge.loc[pd.notnull(final_merge["UserEmail"])]
+        final_merge.drop_duplicates(subset=['UserEmail', 'CompanyName'], keep='first')
+        CompanyNameCheck = pd.isnull(final_merge.CompanyName)
+        UserFirstNameCheck = pd.isnull(final_merge.UserFirstName)
+        UserLastNameCheck = pd.isnull(final_merge.UserLastName)
+        removeNoName = np.logical_not(np.logical_and.reduce((CompanyNameCheck, UserFirstNameCheck, UserLastNameCheck)))
+        final_merge = final_merge[removeNoName]
+        final_merge = final_merge.drop(final_merge.columns[0], axis=1)
+        final_merge.sort_values(by=['UserEmail', 'CompanyName'], ascending=False,inplace=True)
+        final_merge = final_merge[final_merge.UserEmail.str.match(r"[^@]+@[^@]+\.[^@]+", na=False)]
+        return final_merge
 if __name__ == '__main__':
     path = r'raw'
     fm = FilesMerger(path)
