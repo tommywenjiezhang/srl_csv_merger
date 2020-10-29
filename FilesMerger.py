@@ -5,54 +5,45 @@ import re
 import qgrid as qd
 import numpy as np
 import difflib
-from FileOperation import FileOperation 
 from TableOperation import TableOperation
 from FileReport import FileReport
 from MatchTable import MatchTable
+from FileOpener import FolderOpener
+from FileData import FileData
+import subprocess
+import sys
+import webbrowser
+import multiprocessing
+import time
+from Merger import Merger
 
-class FilesMerger:
+
+class FilesMerger(Merger):
+    CPU_COUNT = multiprocessing.cpu_count()
     def __init__(self,path):
-        self.path = path
-        self.all_files = self.readDirCsv()
-        self.results =  self.bulk_operation()
+        super(FilesMerger,self).__init__(path)
         
-    def readDirCsv(self):
-        all_files = glob.glob(self.path + "/*.csv")
-        return all_files
-    
-    def bulk_operation(self):
-        results = map(lambda x: FilesMerger.combinOperation(x), self.all_files)
-        return results
-    
-    def writeMatchTableReport(self):
+    def show(self):
         for f in self.all_files:
-            mt = MatchTable(pd.read_csv('schema/schema2.csv'),pd.read_csv(f, encoding = 'latin')).matchColumns()
-            FileReport.MatchTableReport(f, mt)
-    
-    def writeFolderStatsReport(self):
-        reports = []
-        for f in self.all_files:
-            fo = FileOperation(f)
-            columsSelected = ["CompanyName" , "UserEmail" , "UserFirstName", "UserLastName" , "Website", "WorkNumber", "Address" ,  "City" , "State" ,  "Zip" ,"filename" ]
-            reports.append(fo.getColumnsStats(columsSelected))
-        combin_report = pd.concat(reports)
-        combin_report.fillna(0, inplace=True)
-        def color_negative_red(val):
-            color = 'red' if val == 0 else 'black'
-            return 'background-color: %s' % color
-        html = combin_report.style.applymap(color_negative_red).render()
-        with open("debug/tablestats.html", "w") as text_file:
-            text_file.write(html)
+            fo = FileData(f)
+            df = fo.get()
+            yield df
             
     
+    def bulk_operation(self):
+        with multiprocessing.Pool(FilesMerger.CPU_COUNT) as pool:
+            results = pool.map(FilesMerger.combin_operation, self.all_files)
+        return results
+    
     @staticmethod
-    def combinOperation(file):
-        fo = FileOperation(file)
-        df = fo.getExtractedData()
+    def combin_operation(filename):
+        fo = FileData(filename)
+        df = fo.get()
         return df
     
-    def concat(self):
-        df = pd.concat(self.results)
+    def merge(self,file):
+        results = self.bulk_operation()
+        df = pd.concat(results)
         # min_number_of_value = 10
         # df = df.loc[:, (df.notnull().sum(axis=0) >= min_number_of_value)]
         # hasEmailorPhone = np.logical_or(pd.notnull(df["UserEmail"]),pd.notnull(df["WorkNumber"]))
@@ -63,10 +54,13 @@ class FilesMerger:
         moveItems = ["CompanyName" , "UserEmail" , "UserFirstName", "UserLastName" , "Website", "WorkNumber", "Address" ,  "City" , "State" ,  "Zip" ,"filename" ]
         tb = TableOperation(df)
         df = tb.moveColumnsToFront(moveItems)
-        self.writeMatchTableReport()
-        df.to_csv("out/finalMerge_ver4.csv")
+        if not os.path.exists('./finalMerge'):
+            os.mkdir('./finalMerge')
+        fullpath = os.path.join('./finalMerge', file)
+        df.to_csv(fullpath)
+        # self.writeMatchTableReport()
         return df
-    
+        
     def clean(self, final_merge):
         final_merge = final_merge.loc[pd.notnull(final_merge["UserEmail"])]
         final_merge.drop_duplicates(subset=['UserEmail', 'CompanyName'], keep='first')
@@ -80,35 +74,20 @@ class FilesMerger:
         final_merge = final_merge[final_merge.UserEmail.str.match(r"[^@]+@[^@]+\.[^@]+", na=False)]
         return final_merge
     
-    
-import xlrd
-import csv
 
-def csv_from_excel(filename):
-    
-    outdir = './xlsxsave'
-    if not os.path.exists(outdir):
-        os.mkdir(outdir)
-    fileCsveXT = re.sub(r"\.xlsx", "", filename) + ".csv"
-    fileCsveXT = re.sub(r'[()_\s+]', "_", fileCsveXT)
-    
-    outputPath = os.path.join(outdir, fileCsveXT[4:])
-    data = pd.read_excel(filename, sheet_name=0 )
-    data.to_csv(outputPath,index=False,header=None ,mode="w", encoding='utf-8')
-
-
-
-def readDirCsv(path):
-        all_files = glob.glob(path + "/*.csv")
-        return all_files
-    
 if __name__ == '__main__':
-    fm = FilesMerger("./raw")
-    fm.writeFolderStatsReport()
-    # path = './raw'
-    # for f in readDirCsv(path):
-    #     fileCsveXT = re.sub(r"(\.csv)\.csv", "\1", f)
-    #     os.rename(f,fileCsveXT)
+    filename = FolderOpener().OpenDir()
+    t1_start = time.perf_counter() 
+    fm = FilesMerger(filename)
+    fm.merge('final_merge_ver5.csv')
+    ## Specify Folder Name You want you output to
+    # fm.writeFolderStatsReport(r'./TableStats')
+    # next_df = fm.readPerTable()
+    # g = next(next_df)
+    # print(g['UserEmail'])
+    t1_stop = time.perf_counter() 
+    print("Elapsed time:", t1_stop, t1_start)
+    print("Elapsed time during the whole program in seconds:", t1_stop-t1_start) 
     
     
    

@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 
 
+
 class MatchTable():
     ISMATCHEDCOLUMN = "matchedColumn"
     ORIGINALCOLUMN = "foreignColumn"
@@ -23,12 +24,11 @@ class MatchTable():
         df['foreignColumn'] = pd.Series(self.raw_df.columns)
         df['matchedColumn'] = df['MatchScore'].apply(lambda x : x >= 90)
         df['matchedColumn'] = df['matchedColumn'].fillna(False)
-        df.to_csv(r"debug/matchTable_ver4.csv")
         return df
     
     def getMatchedColumn(self, columnName):
         matchedCiteria =  np.logical_and(self.matchtable['matchedColumn'], pd.notnull(self.matchtable['matchedColumn']))
-        matchedColumn = pd.Series(self.matchtable[columnName].where(matchedCiteria)).dropna()
+        matchedColumn = pd.Series(self.matchtable[columnName].where(matchedCiteria))
         return matchedColumn.to_numpy()
      
     def getMissingSchemaColumns(self):
@@ -48,9 +48,17 @@ class MatchTable():
         isMatched = self.matchtable['matchedColumn']
         IsExisted = pd.notnull(self.matchtable['MatchedColumnName'])
         citeria = np.logical_and(isMatched,IsExisted)
-        tableColumnsName = self.matchtable['foreignColumn'].where(citeria).dropna()
-        self.matchtable.loc[self.matchtable['MatchedColumnName'].duplicated(), 'MatchedColumnName'] = np.NaN
-        schemaColumnsName= self.matchtable['MatchedColumnName'].where(citeria).dropna()
+        tableColumnsName = self.matchtable['foreignColumn'].where(citeria)
+        schemaColumnsName= self.matchtable['MatchedColumnName'].where(citeria)
         keyName = np.array(tableColumnsName)
         valueName = np.array(schemaColumnsName)
-        return dict(zip(keyName, valueName))
+        mapper = dict(zip(keyName, valueName))
+        mapper = {k: v for k, v in mapper.items() if v is not None and pd.notnull(v)}
+        return mapper
+    
+if __name__ == "__main__":
+    df_dentist = pd.read_csv("../newRaw/FinalMerged_toExcel.csv", encoding="latin")
+    mt = MatchTable(pd.read_csv("./schema/schema2.csv"), df_dentist)
+    for key, value in mt._columRenameMapper().items():
+        print(key,value)
+    

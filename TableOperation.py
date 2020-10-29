@@ -25,13 +25,14 @@ class TableOperation():
         if len(columns) <=0:
             pass
         columnsToArray = np.array(columns)
-        print(columnsToArray)
         columnsToArray = np.sort(columnsToArray)
-        
         difference = np.setdiff1d(columnsToArray, self._df.columns)
-        self._df[[d for d in difference]] = np.nan
+        for d in difference:
+            if d not in self._df:
+                self._df[[d for d in difference]] = np.nan
+            else:
+                np.append(columnsToArray,d)
         
-        self.print_columns(columnsToArray , self._df.columns, difference,  name=["Combined" ,"actual", "difference"])
         extracted_df = self._df[[x for x in columnsToArray]]
         extracted_df = extracted_df.loc[:,~extracted_df.columns.duplicated()]
         self._df = extracted_df
@@ -42,4 +43,4 @@ class TableOperation():
         for i in range(0,len(columns)):
             colName = name['name']
             output[f'{colName[i]}'] = pd.Series(columns[i]).sort_values(ascending=True)
-        output.to_csv(rf"debug/output_ver4.csv")
+        return output
